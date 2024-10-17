@@ -1,0 +1,241 @@
+<!DOCTYPE html> 
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Call bot - Generic</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 900px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        form {
+            margin-bottom: 30px;
+        }
+        label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        input[type="file"], input[type="text"], button {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #5cb85c;
+            color: white;
+            width: 45%;
+            border-radius: 100px;
+            cursor: pointer;
+            margin: 5px; /* Space between buttons */
+        }
+        button:hover {
+            background-color: #4cae4c;
+        }
+        #response {
+            padding: 20px;
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .button-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 20px 0; /* Space above and below the button row */
+        }
+        .or-text {
+            text-align: center;
+            margin: 10px 0; /* Space above and below the text */
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Call bot - Generic</h1>
+
+    <!-- Form to upload dataset -->
+    <form id="uploadForm" method="POST" enctype="multipart/form-data" action="/upload_dataset">
+        <label for="dataset">Upload Dataset (CSV or Excel):</label>
+        <input type="file" name="file" id="dataset" accept=".csv, .xlsx" required>
+        <button type="submit">Upload and Train</button>
+    </form>
+
+    <!-- Download template button -->
+    <form id="downloadTemplateForm" method="GET" action="/download_template">
+        <button type="submit">Download Dataset Template</button>
+    </form>
+
+    <!-- Form to get similar queries -->
+    <form id="queryForm" method="POST">
+        <label for="query">Enter Query:</label>
+        <input type="text" id="queryInput" name="query" placeholder="Type your query here..." required>
+        <button type="button" id="getQueryBtn">Get Similar Query</button>
+    </form>
+
+    <div class="or-text">Or</div>
+
+    <div class="button-row">
+        <!-- Start and End voice conversation buttons -->
+        <button type="button" id="startVoiceBtn">Start Conversation in Voice</button>
+        <button type="button" id="endVoiceBtn" disabled>End Conversation</button>
+    </div>
+
+    <!-- Response container -->
+    <div id="response"></div>
+</div>
+
+<script>
+    // Global variables
+    let isListening = false;
+    const exitPhrases = [
+        'stop', 'exit', 'end', 'end call', 'end the call', 'thank you', 'bye', 
+        'thanks for informing me, bye', 'send on whatsapp', 'send details on whatsapp', 
+        'send the details on whatsapp', 'send the information and end the call', 'ok bye',
+        'thank you very much'
+    ];
+    let recognition;
+
+    // Handle form submission for similar query search
+    document.getElementById('getQueryBtn').addEventListener('click', function() {
+        const query = document.getElementById('queryInput').value;
+        const formData = new FormData();
+        formData.append('query', query);
+
+        fetch('/get_similar_queries', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            const responseDiv = document.getElementById('response');
+            responseDiv.innerHTML = '';  // Clear previous results
+
+            if (data.length > 0) {
+                data.forEach(result => {
+                    responseDiv.innerHTML += `
+                        <p><strong>Query:</strong> ${result.query}</p>
+                        <p><strong>Response:</strong> ${result.response}</p>
+                        <p><strong>Context:</strong> ${result.context}</p>
+                        <hr>
+                    `;
+                });
+            } else {
+                responseDiv.innerHTML = '<p>No similar queries found.</p>';
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('response').innerHTML = '<p>Error occurred while processing the request.</p>';
+        });
+    });
+
+    // Handle voice conversation
+    document.getElementById('startVoiceBtn').addEventListener('click', function() {
+        isListening = true;
+        this.disabled = true;
+        document.getElementById('endVoiceBtn').disabled = false;
+        startVoiceConversation();
+    });
+
+    document.getElementById('endVoiceBtn').addEventListener('click', function() {
+        isListening = false;
+        this.disabled = true;
+        document.getElementById('startVoiceBtn').disabled = false;
+        document.getElementById('response').innerHTML += '<p>Have a great day, Bye!</p>';
+    });
+
+    function startVoiceConversation() {
+        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        recognition.lang = 'en-US';
+
+        recognition.onresult = function(event) {
+            const voiceQuery = event.results[0][0].transcript.toLowerCase();
+            console.log('Voice Query:', voiceQuery);
+
+            if (exitPhrases.some(phrase => voiceQuery.includes(phrase))) {
+                document.getElementById('endVoiceBtn').click(); // Simulate click to end conversation
+            } else {
+                // Send the query to the server
+                document.getElementById('queryInput').value = voiceQuery;
+                fetchSimilarQueries(voiceQuery);
+            }
+        };
+
+        recognition.onerror = function(event) {
+            console.error('Voice recognition error:', event.error);
+        };
+
+        recognition.onend = function() {
+            if (isListening) {
+                recognition.start(); // Restart recognition if still listening
+            }
+        };
+
+        recognition.start();
+    }
+
+    function fetchSimilarQueries(query) {
+        const formData = new FormData();
+        formData.append('query', query);
+
+        fetch('/get_similar_queries', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            const responseDiv = document.getElementById('response');
+            responseDiv.innerHTML = '';  // Clear previous results
+
+            if (data.length > 0) {
+                data.forEach(result => {
+                    responseDiv.innerHTML += `
+                        <p><strong>Query:</strong> ${result.query}</p>
+                        <p><strong>Response:</strong> ${result.response}</p>
+                        <p><strong>Context:</strong> ${result.context}</p>
+                        <hr>
+                    `;
+                    speakResponse(result.response); // Speak the response
+                });
+            } else {
+                responseDiv.innerHTML = '<p>No similar queries found.</p>';
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('response').innerHTML = '<p>Error occurred while processing the request.</p>';
+        });
+    }
+
+    function speakResponse(response) {
+        const utterance = new SpeechSynthesisUtterance(response);
+        utterance.onend = function() {
+            // After speaking, continue listening for the next query
+            if (isListening) {
+                startVoiceConversation(); // Restart listening after response
+            }
+        };
+        window.speechSynthesis.speak(utterance);
+    }
+
+</script>
+
+</body>
+</html>

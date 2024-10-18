@@ -6,7 +6,7 @@
     <title>Call bot - Generic</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Arial', sans-serif;
             margin: 0;
             padding: 0;
             background-color: #f4f4f4;
@@ -14,13 +14,16 @@
         .container {
             max-width: 900px;
             margin: 50px auto;
-            padding: 20px;
+            padding: 30px;
             background-color: #fff;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
         }
         h1 {
             text-align: center;
             color: #333;
+            margin-bottom: 20px;
+            font-size: 2em;
         }
         form {
             margin-bottom: 30px;
@@ -29,21 +32,29 @@
             display: block;
             margin-bottom: 10px;
             font-weight: bold;
+            color: #555;
         }
-        input[type="file"], input[type="text"], button {
+        input[type="file"], input[type="text"], select, button {
             width: 100%;
-            padding: 10px;
+            padding: 12px;
             margin-bottom: 20px;
             border: 1px solid #ccc;
             border-radius: 4px;
+            box-sizing: border-box;
+            transition: border-color 0.3s;
+        }
+        input[type="file"]:focus, input[type="text"]:focus, select:focus, button:focus {
+            border-color: #5cb85c;
+            outline: none;
         }
         button {
             background-color: #5cb85c;
             color: white;
-            width: 45%;
-            border-radius: 100px;
+            border: none;
+            border-radius: 25px;
             cursor: pointer;
-            margin: 5px; /* Space between buttons */
+            padding: 12px;
+            transition: background-color 0.3s;
         }
         button:hover {
             background-color: #4cae4c;
@@ -53,15 +64,34 @@
             background-color: #f9f9f9;
             border: 1px solid #ddd;
             border-radius: 4px;
+            margin-top: 20px;
         }
         .button-row {
             display: flex;
             justify-content: space-between;
-            margin: 20px 0; /* Space above and below the button row */
+            margin: 20px 0;
         }
         .or-text {
             text-align: center;
-            margin: 10px 0; /* Space above and below the text */
+            margin: 10px 0;
+            font-weight: bold;
+            color: #777;
+        }
+        .column-options {
+            margin-bottom: 15px;
+            padding: 10px;
+            background-color: #f1f1f1;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        .column-options label {
+            margin-bottom: 5px;
+            display: block;
+        }
+        .column-options select {
+            width: auto;
+            display: inline-block;
+            margin-left: 10px;
         }
     </style>
 </head>
@@ -74,6 +104,7 @@
     <form id="uploadForm" method="POST" enctype="multipart/form-data" action="/upload_dataset">
         <label for="dataset">Upload Dataset (CSV or Excel):</label>
         <input type="file" name="file" id="dataset" accept=".csv, .xlsx" required>
+        <div id="columnOptionsContainer"></div> <!-- Container for displaying column options -->
         <button type="submit">Upload and Train</button>
     </form>
 
@@ -111,6 +142,44 @@
         'thank you very much'
     ];
     let recognition;
+
+    document.getElementById('dataset').addEventListener('change', handleFileUpload);
+
+    function handleFileUpload(event) {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const content = e.target.result;
+                const rows = parseCSV(content); // Modify this if you're using Excel
+                displayColumnOptions(rows[0]); // Display options for the first row (column names)
+            };
+            reader.readAsText(file);
+        }
+    }
+
+    function parseCSV(content) {
+        const lines = content.split('\n');
+        return lines.map(line => line.split(',')); // Modify this if CSV has different structure
+    }
+
+    function displayColumnOptions(columns) {
+        const container = document.getElementById('columnOptionsContainer');
+        container.innerHTML = ''; // Clear previous options
+        columns.forEach((column, index) => {
+            const optionHTML = `
+                <div class="column-options">
+                    <label>${column}</label>
+                    <select name="column_type_${index}">
+                        <option value="irrelevant">Irrelevant</option>
+                        <option value="question" ${column.toLowerCase() === 'query' ? 'selected' : ''}>Question/Query</option>
+                        <option value="answer" ${column.toLowerCase() === 'response' ? 'selected' : ''}>Answer/Response</option>
+                    </select>
+                </div>
+            `;
+            container.innerHTML += optionHTML;
+        });
+    }
 
     // Handle form submission for similar query search
     document.getElementById('getQueryBtn').addEventListener('click', function() {

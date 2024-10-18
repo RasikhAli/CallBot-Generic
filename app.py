@@ -62,6 +62,32 @@ def upload_dataset():
     
     # Get the uploaded file
     file = request.files['file']
+
+    # Get all form data
+    selected_options = {}
+    
+    # Loop through all column select inputs and extract index
+    for key in request.form:
+        if key.startswith('column_type_'):
+            column_index = key.split('_')[-1]  # Extract the index from the key (e.g., column_type_1 -> 1)
+            selected_options[int(column_index)] = request.form[key]
+
+    # Filter and print only "query" and "response" columns
+    query_columns = []
+    question_column = 0
+    response_column = 1
+    for index, value in selected_options.items():
+        if value == 'question':  # Column marked as Question/Query
+            question_column = index
+            query_columns.append(f"Column at index {index} is 'query'")
+        elif value == 'answer':  # Column marked as Answer/Response
+            response_column = index
+            query_columns.append(f"Column at index {index} is 'response'")
+    
+    # Print the query/response column indices
+    # print("Query/Response Columns:", query_columns)
+    
+
     if file and (file.filename.endswith('.csv') or file.filename.endswith('.xlsx')):
         # Save the uploaded file with a fixed name: "query_dataset"
         if file.filename.endswith('.csv'):
@@ -81,8 +107,8 @@ def upload_dataset():
         df = pd.read_csv(os.path.join(DATA_FOLDER, 'query_dataset.csv'))
 
         # Clean the queries and responses
-        df['Query_cleaned'] = df['Query'].apply(clean_text)
-        df['Response_cleaned'] = df['Response'].apply(clean_text)
+        df['Query_cleaned'] = df.iloc[:, question_column].apply(clean_text)
+        df['Response_cleaned'] = df.iloc[:, response_column].apply(clean_text)
 
         # Generate embeddings
         query_embeddings = model.encode(df['Query_cleaned'].tolist())
